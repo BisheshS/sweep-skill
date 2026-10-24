@@ -1,0 +1,8 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  guards:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/test_guards.py
