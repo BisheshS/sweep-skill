@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk cleanup</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,.10);
+  --blue: #2a78d6; --blue-soft: #cde2fb; --wash: rgba(42,120,214,.07);
+  --good: #0ca30c; --warn: #fab219; --crit: #d03b3b; --used: #c3c2b7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+    --blue: #3987e5; --blue-soft: #184f95; --wash: rgba(57,135,229,.12); --used: #383835;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+  --blue: #3987e5; --blue-soft: #184f95; --wash: rgba(57,135,229,.12); --used: #383835;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 120px; }
+h1 { font-size: 20px; margin: 0 0 2px; }
+.sub { color: var(--ink2); margin: 0 0 20px; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; }
+.hero { display: flex; gap: 32px; flex-wrap: wrap; align-items: baseline; }
+.hero .num { font-size: 34px; font-weight: 650; letter-spacing: -.5px; }
+.hero .lab { color: var(--ink2); font-size: 12px; }
+.hero .arrow { color: var(--muted); font-size: 24px; }
+.gauge { display: flex; height: 14px; margin-top: 14px; border-radius: 4px; overflow: hidden; background: var(--page); border: 1px solid var(--ring); gap: 2px; }
+.gauge i { display: block; height: 100%; transition: width .25s; }
+.g-used { background: var(--used); } .g-free { background: transparent; }
+.g-sel { background: var(--blue); border-radius: 0 4px 4px 0; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; color: var(--ink2); font-size: 12px; }
+.legend b { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 20px 0 8px; }
+button, .chip-btn { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button:hover { background: var(--wash); }
+button.primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+button.primary:hover { filter: brightness(1.08); }
+button[aria-pressed="true"] { background: var(--wash); border-color: var(--blue); }
+input[type=search] { font: inherit; padding: 6px 10px; border: 1px solid var(--axis); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 160px; margin-left: auto; }
+.group { margin-top: 20px; }
+.ghead { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px 6px; border-bottom: 1px solid var(--axis); }
+.ghead h2 { font-size: 13px; margin: 0; text-transform: uppercase; letter-spacing: .04em; color: var(--ink2); }
+.ghead span { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.row { display: grid; grid-template-columns: 28px minmax(0,1fr) 150px 70px 84px; gap: 12px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--grid); cursor: pointer; }
+.row:hover { background: var(--wash); }
+.row.sel { background: var(--wash); }
+.row input { width: 16px; height: 16px; accent-color: var(--blue); margin: 0 auto; }
+.name { font-weight: 550; overflow-wrap: anywhere; }
+.note { color: var(--ink2); font-size: 12px; margin-top: 1px; }
+.track { height: 8px; background: transparent; }
+.fill { height: 8px; background: var(--blue); border-radius: 0 4px 4px 0; min-width: 2px; }
+.size { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink2); white-space: nowrap; }
+.tag svg { width: 14px; height: 14px; flex: none; }
+.insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 16px; }
+.ins { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.ins h3 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: baseline; }
+.ins h3 span { color: var(--blue); }
+.ins p { margin: 0; color: var(--ink2); font-size: 12.5px; flex: 1; }
+.ins button { align-self: flex-start; padding: 4px 10px; font-size: 12px; }
+.ins.keep h3 span { color: var(--muted); }
+.row.locked { cursor: default; opacity: .8; }
+.row.locked input { visibility: hidden; }
+.empty { color: var(--muted); padding: 24px 4px; text-align: center; }
+.foot { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--axis); }
+.foot .in { max-width: 960px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.foot .sum { font-weight: 600; font-variant-numeric: tabular-nums; }
+.foot .hint { color: var(--ink2); font-size: 12px; flex: 1 1 220px; }
+.warn { color: var(--ink2); font-size: 12px; margin-top: 8px; }
+@media (max-width: 640px) { .row { grid-template-columns: 24px minmax(0,1fr) 64px; } .track, .tag { display: none; } input[type=search] { margin-left: 0; width: 100%; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-safe" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="#0ca30c" stroke-width="1.6"/><path d="M4.8 8.2l2.2 2.2 4.2-4.6" fill="none" stroke="#0ca30c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M8 1.8l6.6 11.6H1.4z" fill="none" stroke="#fab219" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6.2v3.4M8 11.3v.2" stroke="#fab219" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-ask" viewBox="0 0 16 16"><circle cx="8" cy="5" r="2.6" fill="none" stroke="#898781" stroke-width="1.6"/><path d="M2.8 14c.4-3 2.6-4.4 5.2-4.4s4.8 1.4 5.2 4.4" fill="none" stroke="#898781" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-keep" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="#898781" stroke-width="1.6"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2" fill="none" stroke="#898781" stroke-width="1.6"/></symbol>
+</svg>
+<div class="wrap">
+  <h1>Disk cleanup</h1>
+  <p class="sub" id="sub"></p>
+
+  <div class="card">
+    <div class="hero">
+      <div><div class="num" id="freeNow"></div><div class="lab">free now</div></div>
+      <div class="arrow">→</div>
+      <div><div class="num" id="freeAfter"></div><div class="lab">free after your selection</div></div>
+      <div><div class="num" id="selBytes" style="color:var(--blue)"></div><div class="lab" id="selLab">selected</div></div>
+    </div>
+    <div class="gauge" id="gauge" role="img" aria-label="Disk usage"><i class="g-used" id="gUsed"></i><i class="g-sel" id="gSel"></i><i class="g-free" id="gFree"></i></div>
+    <div class="legend"><span><b style="background:var(--used)"></b><span id="lgUsed"></span></span><span><b style="background:var(--blue)"></b><span id="lgSel"></span></span><span><b style="background:var(--page);border:1px solid var(--axis)"></b><span id="lgFree"></span></span></div>
+    <div class="warn" id="trashWarn" hidden>Items in “Your files” go to the Trash. The space returns after you empty the Trash.</div>
+  </div>
+
+  <div class="insights" id="insights"></div>
+
+  <div class="bar">
+    <button id="bSafe" class="primary">Select all safe</button>
+    <button id="bClear">Clear</button>
+    <span style="width:8px"></span>
+    <button data-f="all" aria-pressed="true">All</button>
+    <button data-f="safe" aria-pressed="false">Safe</button>
+    <button data-f="check" aria-pressed="false">Check first</button>
+    <button data-f="ask" aria-pressed="false">You decide</button>
+    <button data-f="drive" aria-pressed="false">Move to pendrive</button>
+    <button data-f="keep" aria-pressed="false">Keep</button>
+    <input id="q" type="search" placeholder="Filter by name" aria-label="Filter by name">
+  </div>
+
+  <div id="groups"></div>
+</div>
+
+<div class="foot"><div class="in">
+  <span class="sum" id="fsum">Nothing selected</span>
+  <span class="hint" id="fhint">Tick items, then copy the plan and paste it into Claude. Nothing is deleted from this page.</span>
+  <button id="bCopy" class="primary" disabled>Copy plan</button>
+  <button id="bSave" disabled>Save plan.json</button>
+</div></div>
+
+<script>
+const SCAN = /*SCAN_JSON*/null;
+const $ = s => document.querySelector(s);
+const gb = b => b <= 0 ? "0 GB" : b >= 1e9 ? (b/1e9).toFixed(b >= 1e10 ? 0 : 1) + " GB" : Math.max(1, Math.round(b/1e6)) + " MB";
+const RISK = { safe: ["i-safe","Safe"], check: ["i-check","Check first"], ask: ["i-ask","You decide"], keep: ["i-keep","Keep"] };
+let filter = "all", query = "";
+const sel = new Set();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+if (!SCAN) { document.body.innerHTML = "<p style='padding:24px'>No scan data. Run scan.py, then build_report.py.</p>"; throw 0; }
+SCAN.items.forEach((it, n) => it.n = n);
+const maxSize = Math.max(1, ...SCAN.items.map(i => i.size));
+$("#sub").textContent = "Scanned " + new Date(SCAN.generated*1000).toLocaleString() + " · " + SCAN.items.length + " items found · " + gb(SCAN.items.filter(i=>i.risk!=="keep").reduce((a,i)=>a+i.size,0)) + " could be freed in total";
+
+function visible(it) {
+  return (filter === "all" || (filter === "drive" ? !!it.offload : it.risk === filter)) && (!query || (it.label + " " + (it.path||"")).toLowerCase().includes(query));
+}
+function render() {
+  const groups = {};
+  SCAN.items.filter(visible).forEach(it => (groups[it.group] = groups[it.group] || []).push(it));
+  const order = Object.keys(groups).sort((a,b) => groups[b].reduce((s,i)=>s+i.size,0) - groups[a].reduce((s,i)=>s+i.size,0));
+  $("#groups").innerHTML = order.length ? order.map(g => {
+    const list = groups[g];
+    return `<section class="group"><div class="ghead"><h2>${esc(g)}</h2><span>${list.length} · ${gb(list.reduce((s,i)=>s+i.size,0))}</span></div>` +
+      list.map(it => {
+        const r = RISK[it.risk];
+        return `<label class="row ${sel.has(it.n)?"sel":""} ${it.risk==="keep"?"locked":""}" data-n="${it.n}" title="${esc(it.path||it.label)}">
+          <input type="checkbox" ${sel.has(it.n)?"checked":""} ${it.risk==="keep"?"disabled":""}>
+          <div><div class="name">${esc(it.label)}</div><div class="note">${esc(it.rebuild)}${it.note ? " " + esc(it.note) : ""}</div></div>
+          <div class="track"><div class="fill" style="width:${Math.max(1, it.size/maxSize*100).toFixed(1)}%"></div></div>
+          <div class="size">${gb(it.size)}</div>
+          <div class="tag"><svg><use href="#${r[0]}"/></svg>${r[1]}</div></label>`;
+      }).join("") + `</section>`;
+  }).join("") : `<div class="empty">Nothing matches this filter.</div>`;
+  summary();
+}
+function summary() {
+  const d = SCAN.disk, S = [...sel].reduce((a,n) => a + SCAN.items[n].size, 0);
+  const usedAfter = Math.max(0, d.used - S);
+  $("#freeNow").textContent = gb(d.free);
+  $("#freeAfter").textContent = gb(d.free + S);
+  $("#selBytes").textContent = gb(S);
+  $("#selLab").textContent = sel.size + " item" + (sel.size === 1 ? "" : "s") + " selected";
+  $("#gUsed").style.width = (usedAfter/d.total*100) + "%";
+  $("#gSel").style.width = (S/d.total*100) + "%";
+  $("#gFree").style.width = (d.free/d.total*100) + "%";
+  $("#lgUsed").textContent = "Used " + gb(usedAfter);
+  $("#lgSel").textContent = "To free " + gb(S);
+  $("#lgFree").textContent = "Free " + gb(d.free);
+  $("#trashWarn").hidden = ![...sel].some(n => SCAN.items[n].action && SCAN.items[n].action.type === "trash");
+  $("#fsum").textContent = sel.size ? `${sel.size} selected · ${gb(S)}` : "Nothing selected";
+  $("#bCopy").disabled = $("#bSave").disabled = !sel.size;
+}
+function plan() { return { v: 1, scan: SCAN.generated, n: [...sel].sort((a,b)=>a-b) }; }
+$("#groups").addEventListener("change", e => {
+  const row = e.target.closest(".row"); if (!row) return;
+  const n = +row.dataset.n;
+  e.target.checked ? sel.add(n) : sel.delete(n);
+  row.classList.toggle("sel", e.target.checked); summary();
+});
+function renderInsights() {
+  $("#insights").innerHTML = (SCAN.insights || []).map((x, k) => {
+    const selectable = x.ids.filter(n => SCAN.items[n].risk === "safe");
+    return `<div class="ins ${x.kind === "keep" ? "keep" : ""}"><h3><span>${esc(x.icon)}</span>${esc(x.title)}</h3><p>${esc(x.detail)}</p>` +
+      (["temp","apps"].includes(x.kind) ? "" : selectable.length ? `<button data-ins="${k}">Select ${selectable.length} item${selectable.length>1?"s":""} · ${gb(selectable.reduce((a,n)=>a+SCAN.items[n].size,0))}</button>` : `<button data-review="${x.kind === "keep" ? "keep" : (x.ids.length ? SCAN.items[x.ids[0]].risk : "all")}">${x.kind === "keep" ? "Show them" : "Review these"}</button>`) + `</div>`;
+  }).join("");
+}
+$("#insights").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.review !== undefined) { document.querySelector('[data-f="' + b.dataset.review + '"]').click(); window.scrollTo({ top: document.querySelector(".bar").offsetTop - 8, behavior: "smooth" }); return; }
+  SCAN.insights[+b.dataset.ins].ids.filter(n => SCAN.items[n].risk === "safe").forEach(n => sel.add(n)); render();
+});
+$("#bSafe").onclick = () => { SCAN.items.filter(i => i.risk === "safe").forEach(i => sel.add(i.n)); render(); };
+$("#bClear").onclick = () => { sel.clear(); render(); };
+document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
+  filter = b.dataset.f; document.querySelectorAll("[data-f]").forEach(x => x.setAttribute("aria-pressed", x === b)); render();
+});
+$("#q").oninput = e => { query = e.target.value.toLowerCase(); render(); };
+$("#bCopy").onclick = async () => {
+  const text = "DISK-CLEANUP-PLAN " + JSON.stringify(plan());
+  try { await navigator.clipboard.writeText(text); $("#fhint").textContent = "Copied. Paste it into Claude and press Enter."; }
+  catch { prompt("Copy this plan and paste it into Claude:", text); }
+};
+$("#bSave").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(plan())], { type: "application/json" }));
+  a.download = "plan.json"; a.click();
+};
+renderInsights();
+render();
+</script>
+</body>
+</html>

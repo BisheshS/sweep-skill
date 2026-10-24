@@ -1,0 +1,12 @@
+# a scan lists the user's own file and project names: never commit it
+scan.json
+*.scan.json
+plan.txt
+/report.html
+*/report-*.html
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+.disk-cleanup/
+!assets/report.html
