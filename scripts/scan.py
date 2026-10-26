@@ -17,6 +17,7 @@ MIN_PROJ = 50 * 1024 * 1024
 DEFAULT_ROOTS = ["Projects", "Developer", "Code", "code", "dev", "src", "work", "repos", "IdeaProjects",
                  "Documents", "Desktop", "Practice", "GitHub", "git"]
 ITEMS = []
+SKIP = set()
 PROJ_PATHS = []
 
 
@@ -355,14 +356,14 @@ def make_insights(projects, old_days):
     old = ids(lambda it: it["group"].startswith("Old projects"))
     if old:
         b = sum(ITEMS[n]["size"] for n in old)
-        ins.append({"kind": "old", "icon": "◇", "title": "%d old projects (%s) are safe copies on GitHub" % (len(old), gbs(b)),
+        ins.append({"kind": "old", "icon": "◇", "title": "%d old project%s (%s) %s a safe copy on GitHub" % (len(old), "" if len(old) == 1 else "s", gbs(b), "has" if len(old) == 1 else "have"),
                     "detail": "Idle for %d+ days, no uncommitted work, every commit is pushed. They go to the Trash and 'git clone' restores them." % old_days,
                     "bytes": b, "ids": old})
     keep = [p for p in projects if p["only_copy"] and p["size"] >= 50 * 1024 * 1024]
     if keep:
         b = sum(p["size"] for p in keep)
         worst = sorted(keep, key=lambda p: -p["size"])[:3]
-        ins.append({"kind": "keep", "icon": "■", "title": "%d projects (%s) exist only on this Mac" % (len(keep), gbs(b)),
+        ins.append({"kind": "keep", "icon": "■", "title": "%d project%s (%s) %s only on this Mac" % (len(keep), "" if len(keep) == 1 else "s", gbs(b), "exists" if len(keep) == 1 else "exist"),
                     "detail": "No remote, unpushed commits, or uncommitted changes. Never offered for deletion. Back them up: " + ", ".join(p["name"] for p in worst) + ".",
                     "bytes": b, "ids": ids(lambda it: it["group"].startswith("Keep"))})
     sims = ids(lambda it: it["group"] == "Simulators")
@@ -381,7 +382,7 @@ def make_insights(projects, old_days):
         b = sum(ITEMS[n]["size"] for n in files)
         ins.append({"kind": "files", "icon": "○", "title": "%s of big files in Downloads" % gbs(b),
                     "detail": "Movies and installers. Only you can say if you need them. They go to the Trash, not deleted.", "bytes": b, "ids": files})
-    ins += temp_leak_insight() + unused_app_insight()
+    ins += ([] if "temp" in SKIP else temp_leak_insight()) + ([] if "apps" in SKIP else unused_app_insight())
     return ins
 
 
@@ -392,9 +393,11 @@ def main():
     ap.add_argument("--stale-days", type=int, default=180)
     ap.add_argument("--old-days", type=int, default=365)
     ap.add_argument("--min-artifact-mb", type=float, default=100)
+    ap.add_argument("--skip", nargs="*", default=[], choices=["simulators", "temp", "apps"], help="leave out a part of the scan (used by the demo)")
     ap.add_argument("--min-project-mb", type=float, default=50)
     a = ap.parse_args()
-    global MIN_ART, MIN_PROJ
+    global MIN_ART, MIN_PROJ, SKIP
+    SKIP = set(a.skip)
     MIN_ART, MIN_PROJ = a.min_artifact_mb * 1024 * 1024, a.min_project_mb * 1024 * 1024
     roots = a.roots if a.roots else [os.path.join(HOME, r) for r in DEFAULT_ROOTS]
     t0 = time.time()
@@ -403,6 +406,8 @@ def main():
     for label, fn in (("caches", fixed_items), ("app caches", app_cache_items), ("simulators", simulator_items),
                       ("projects (git state, activity)", lambda: projects.extend(project_items(roots, a.stale_days, a.old_days))),
                       ("downloads", user_file_items)):
+        if label == "simulators" and "simulators" in SKIP:
+            continue
         print("scanning " + label + "...", file=sys.stderr)
         fn()
     order = sorted(range(len(ITEMS)), key=lambda n: -ITEMS[n]["size"])

@@ -34,7 +34,7 @@ def dashboard(d):
     tot = {k: sum(i["size"] for i in items if i["risk"] == k) for k in TAG}
     rec = tot["safe"] + tot["check"] + tot["ask"]
     out.append("")
-    out.append(" Reclaimable %s  (the %d projects marked KEEP are not counted)" % (gb(rec).strip(), sum(1 for i in items if i["risk"] == "keep")))
+    out.append(" Reclaimable %s  (the %d KEEP item%s %s not counted)" % (gb(rec).strip(), sum(1 for i in items if i["risk"] == "keep"), "" if sum(1 for i in items if i["risk"] == "keep") == 1 else "s", "is" if sum(1 for i in items if i["risk"] == "keep") == 1 else "are"))
     for k, label in (("safe", "Safe: tools rebuild it"), ("check", "Check first: depends on your work"), ("ask", "You decide: personal or lossy")):
         out.append("   [%s] %s %s  %s" % (TAG[k], gb(tot[k]), bar(tot[k] / max(rec, 1), 20), label))
     out.append("   [KEEP ] %s  only copy of your work, never offered" % gb(tot["keep"]))
